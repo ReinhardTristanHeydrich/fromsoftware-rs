@@ -72,6 +72,35 @@ impl FD4ParamResCap {
     pub unsafe fn get_mut<P: ParamDef>(&mut self, id: u32) -> Option<&mut P> {
         unsafe { self.data.get_row_by_id_mut(id) }
     }
+
+    
+    /// # Safety
+    ///
+    /// Type `P` must match the actual row data structure for this param file.
+    pub unsafe fn get_by_index<P: ParamDef>(&self, id: usize) -> Option<&P> {
+        unsafe { self.data.get_row_by_index(id) }
+    }
+
+    /// # Safety
+    ///
+    /// Type `P` must match the actual row data structure for this param file.
+    pub unsafe fn get_mut_by_index<P: ParamDef>(&mut self, id: usize) -> Option<&mut P> {
+        unsafe { self.data.get_row_by_index_mut(id) }
+    }
+
+    /// # Safety
+    ///
+    /// P must match the param row layout.
+    pub unsafe fn iter<'a, P: ParamDef + 'a>(&'a mut self) -> impl Iterator<Item = &'a P> {
+        unsafe { self.data.iter::<P>() }
+    }
+
+    /// # Safety
+    ///
+    /// P must match the param row layout.
+    pub unsafe fn iter_mut<'a, P: ParamDef + 'a>(&'a mut self) -> impl Iterator<Item = &'a mut P> {
+        unsafe { self.data.iter_mut::<P>() }
+    }
 }
 
 /// Runtime metadata prepended at offset -0x10 from the param file.
@@ -198,6 +227,37 @@ impl ParamFile {
         let data_offset = self.row_data_offset(row_index)?;
         Some(unsafe { &mut *(self.as_ptr().add(data_offset) as *mut P) })
     }
+
+    /// Iterate over all rows by index.
+    ///
+    /// # Safety
+    /// `P` must match the param row layout.
+    pub unsafe fn iter<'a, P: ParamDef + 'a>(&'a self) -> impl Iterator<Item = &'a P> {
+        let count = self.row_count();
+        let ptr = self as *const ParamFile;
+
+        (0..count).map(move |index| unsafe {
+            let file = &*ptr;
+            debug_assert!(index < file.row_count());
+            file.get_row_by_index::<P>(index).unwrap_unchecked()
+        })
+    }
+
+    /// Iterate mutably over all rows by index.
+    ///
+    /// # Safety
+    /// `P` must match the param row layout.
+    pub unsafe fn iter_mut<'a, P: ParamDef + 'a>(&'a mut self) -> impl Iterator<Item = &'a mut P> {
+        let count = self.row_count();
+        let ptr = self as *mut ParamFile;
+
+        (0..count).map(move |index| unsafe {
+            let file = &mut *ptr;
+            debug_assert!(index < file.row_count());
+            file.get_row_by_index_mut::<P>(index).unwrap_unchecked()
+        })
+    }
+
 
     pub const fn metadata(&self) -> &ParamHeaderMetadata {
         unsafe {
